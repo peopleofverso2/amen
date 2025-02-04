@@ -13,14 +13,16 @@ import ReactFlow, {
 import { Box } from '@mui/material';
 import 'reactflow/dist/style.css';
 
-import { CustomNode, CustomEdge, BaseNodeData, VideoNodeData } from '../../types/nodes';
+import { CustomNode, CustomEdge, BaseNodeData, VideoNodeData, InteractionNodeData } from '../../types/nodes';
 import Sidebar from './controls/Sidebar';
 import BaseNode from './nodes/BaseNode';
 import VideoNode from './nodes/VideoNode';
+import InteractionNode from './nodes/InteractionNode';
 
 const nodeTypes = {
   base: BaseNode,
   video: VideoNode,
+  interactionNode: InteractionNode,
 };
 
 let id = 0;
@@ -66,17 +68,56 @@ const ScenarioEditor = () => {
 
       const newNode: Node = {
         id: getId(),
-        type: type === 'video' ? 'video' : 'base',
+        type: type === 'video' ? 'video' : type === 'interactionNode' ? 'interactionNode' : 'base',
         position,
         data: type === 'video' 
           ? { ...baseData, videoUrl: '', customButtons: [] } 
-          : baseData,
+          : type === 'interactionNode'
+            ? { label: 'Interactions', parentNodeId: '', buttons: [], timing: { showAtEnd: true } }
+            : baseData,
       };
 
       setNodes((nds) => nds.concat(newNode));
     },
     [setNodes]
   );
+
+  const handleCreateInteraction = useCallback((parentNodeId: string) => {
+    // Trouver le nœud parent
+    const parentNode = nodes.find(node => node.id === parentNodeId);
+    if (!parentNode) return;
+
+    // Créer le nœud d'interaction
+    const interactionNode: Node<InteractionNodeData> = {
+      id: getId(),
+      type: 'interactionNode',
+      position: {
+        x: parentNode.position.x + 400,
+        y: parentNode.position.y,
+      },
+      data: {
+        label: 'Interactions',
+        parentNodeId,
+        buttons: [],
+        timing: {
+          showAtEnd: true,
+        },
+      },
+    };
+
+    // Ajouter le nœud
+    setNodes((nds) => nds.concat(interactionNode));
+
+    // Créer la connexion
+    const edge: Edge = {
+      id: getId(),
+      source: parentNodeId,
+      target: interactionNode.id,
+      type: 'default',
+    };
+
+    setEdges((eds) => eds.concat(edge));
+  }, [nodes, setNodes, setEdges]);
 
   return (
     <Box sx={{ display: 'flex', width: '100%', height: '100%' }}>
@@ -88,8 +129,8 @@ const ScenarioEditor = () => {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onDragOver={onDragOver}
           onDrop={onDrop}
+          onDragOver={onDragOver}
           nodeTypes={nodeTypes}
           fitView
         >

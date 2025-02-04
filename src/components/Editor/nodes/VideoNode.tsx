@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useState, useRef } from 'react';
 import { Handle, Position } from 'reactflow';
 import { 
   Card, 
@@ -13,8 +13,10 @@ import {
   TextField,
   Tab,
   Tabs,
-  Box
+  Box,
+  IconButton
 } from '@mui/material';
+import { Add as AddIcon } from '@mui/icons-material';
 import ReactPlayer from 'react-player';
 import { VideoNodeData } from '../../../types/nodes';
 import MediaLibrary from '../../MediaLibrary/MediaLibrary';
@@ -23,28 +25,15 @@ import InteractionButtons from './InteractionButtons';
 interface VideoNodeProps {
   data: VideoNodeData;
   isConnectable: boolean;
+  onCreateInteraction?: (nodeId: string) => void;
 }
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-    </div>
-  );
-}
-
-const VideoNode = ({ data, isConnectable }: VideoNodeProps) => {
+const VideoNode = memo(({ data, isConnectable, onCreateInteraction }: VideoNodeProps) => {
   const [open, setOpen] = useState(false);
   const [tabValue, setTabValue] = useState(0);
   const [videoUrl, setVideoUrl] = useState(data.videoUrl || '');
-  const [localFile, setLocalFile] = useState<File | null>(null);
+  const [showingInteractions, setShowingInteractions] = useState(false);
+  const playerRef = useRef<ReactPlayer>(null);
 
   const handleClickOpen = () => setOpen(true);
   const handleClose = () => setOpen(false);
@@ -53,32 +42,53 @@ const VideoNode = ({ data, isConnectable }: VideoNodeProps) => {
     setTabValue(newValue);
   };
 
-  const handleMediaSelect = (url: string) => {
-    setVideoUrl(url);
-    handleClose();
+  const handleVideoProgress = (state: { played: number; playedSeconds: number; loaded: number; loadedSeconds: number }) => {
+    const duration = playerRef.current?.getDuration() || 0;
+    const timeLeft = duration - state.playedSeconds;
+    
+    // Afficher les interactions quand il reste 0.5 secondes ou moins
+    if (timeLeft <= 0.5 && !showingInteractions) {
+      setShowingInteractions(true);
+    }
   };
 
-  const handleSave = () => {
-    // Mettre à jour le nœud avec la nouvelle URL vidéo
-    data.videoUrl = videoUrl;
-    handleClose();
+  const handleVideoEnded = () => {
+    setShowingInteractions(true);
+  };
+
+  const handleCreateInteraction = () => {
+    if (onCreateInteraction) {
+      onCreateInteraction(data.id);
+    }
   };
 
   return (
     <>
       <Card sx={{ width: 350, backgroundColor: '#2a2a2a' }}>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
-            {data.label || 'Nœud Vidéo'}
-          </Typography>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h6" color="white">
+              {data.label || 'Nœud Vidéo'}
+            </Typography>
+            <IconButton 
+              onClick={handleCreateInteraction}
+              sx={{ color: 'white' }}
+              title="Ajouter des interactions"
+            >
+              <AddIcon />
+            </IconButton>
+          </Stack>
 
           <Box sx={{ height: 200, mb: 2 }}>
             {videoUrl ? (
               <ReactPlayer
+                ref={playerRef}
                 url={videoUrl}
                 width="100%"
                 height="100%"
                 controls
+                onProgress={handleVideoProgress}
+                onEnded={handleVideoEnded}
               />
             ) : (
               <Button 
@@ -92,19 +102,20 @@ const VideoNode = ({ data, isConnectable }: VideoNodeProps) => {
           </Box>
 
           <Box sx={{ position: 'relative', width: '100%', height: 100 }}>
-            <InteractionButtons
-              buttons={data.interactionButtons || []}
-              onChange={(newButtons) => {
-                data.interactionButtons = newButtons;
-              }}
-              containerWidth={350}
-              containerHeight={100}
-              isEditing={true}
-            />
+            {showingInteractions && (
+              <InteractionButtons
+                buttons={data.interactionButtons || []}
+                onChange={(newButtons) => {
+                  data.interactionButtons = newButtons;
+                }}
+                containerWidth={350}
+                containerHeight={100}
+                isEditing={true}
+              />
+            )}
           </Box>
         </CardContent>
 
-        {/* Connecteur d'entrée en haut */}
         <Handle
           type="target"
           position={Position.Top}
@@ -113,7 +124,6 @@ const VideoNode = ({ data, isConnectable }: VideoNodeProps) => {
           style={{ top: 0 }}
         />
 
-        {/* Connecteur de sortie en bas pour le flux principal */}
         <Handle
           type="source"
           position={Position.Bottom}
@@ -147,19 +157,40 @@ const VideoNode = ({ data, isConnectable }: VideoNodeProps) => {
 
           <TabPanel value={tabValue} index={1}>
             <Box sx={{ height: '60vh' }}>
-              <MediaLibrary />
+              <MediaLibrary onSelect={(url) => {
+                setVideoUrl(url);
+                handleClose();
+              }} />
             </Box>
           </TabPanel>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleClose}>Annuler</Button>
-          <Button onClick={handleSave} variant="contained">
+          <Button onClick={() => {
+            data.videoUrl = videoUrl;
+            handleClose();
+          }} variant="contained">
             Sélectionner
           </Button>
         </DialogActions>
       </Dialog>
     </>
   );
-};
+});
 
-export default memo(VideoNode);
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+  return (
+    <div hidden={value !== index} {...other}>
+      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+    </div>
+  );
+}
+
+export default VideoNode;
