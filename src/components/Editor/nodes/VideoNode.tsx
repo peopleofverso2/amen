@@ -104,10 +104,22 @@ const VideoNode = ({ data, isConnectable }: VideoNodeProps) => {
           </Box>
         </CardContent>
 
+        {/* Connecteur d'entrée en haut */}
         <Handle
           type="target"
           position={Position.Top}
           isConnectable={isConnectable}
+          id="in"
+          style={{ top: 0 }}
+        />
+
+        {/* Connecteur de sortie en bas pour le flux principal */}
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          isConnectable={isConnectable}
+          id="out"
+          style={{ bottom: 0 }}
         />
       </Card>
 
