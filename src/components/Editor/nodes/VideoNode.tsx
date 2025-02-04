@@ -16,8 +16,9 @@ import {
   Box
 } from '@mui/material';
 import ReactPlayer from 'react-player';
-import { VideoNodeData } from '../../../types/media';
+import { VideoNodeData } from '../../../types/nodes';
 import MediaLibrary from '../../MediaLibrary/MediaLibrary';
+import InteractionButtons from './InteractionButtons';
 
 interface VideoNodeProps {
   data: VideoNodeData;
@@ -88,6 +89,18 @@ const VideoNode = ({ data, isConnectable }: VideoNodeProps) => {
                 Sélectionner une vidéo
               </Button>
             )}
+          </Box>
+
+          <Box sx={{ position: 'relative', width: '100%', height: 100 }}>
+            <InteractionButtons
+              buttons={data.interactionButtons || []}
+              onChange={(newButtons) => {
+                data.interactionButtons = newButtons;
+              }}
+              containerWidth={350}
+              containerHeight={100}
+              isEditing={true}
+            />
           </Box>
 
           <Stack spacing={1}>

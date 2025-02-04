@@ -8,6 +8,21 @@ export interface Choice {
   condition?: string;
 }
 
+export interface InteractionButton {
+  id: string;
+  label: string;
+  style?: {
+    backgroundColor?: string;
+    textColor?: string;
+    borderRadius?: string;
+    fontSize?: string;
+  };
+  position?: {
+    x: number;
+    y: number;
+  };
+}
+
 export interface BaseNodeData {
   label: string;
   choices: Choice[];
@@ -15,6 +30,7 @@ export interface BaseNodeData {
 
 export interface TextNodeData extends BaseNodeData {
   content: string;
+  interactionButtons: InteractionButton[];
 }
 
 export interface VideoNodeData extends BaseNodeData {
@@ -23,6 +39,7 @@ export interface VideoNodeData extends BaseNodeData {
     label: string;
     timestamp: number;
   }[];
+  interactionButtons: InteractionButton[];
 }
 
 export interface InteractionNodeData extends BaseNodeData {
