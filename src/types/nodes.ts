@@ -1,12 +1,6 @@
-import { Node, Edge } from 'reactflow';
+import { Node } from 'reactflow';
 
 export type NodeType = 'text' | 'video' | 'interaction' | 'voucher' | 'reward';
-
-export interface Choice {
-  text: string;
-  nextNodeId: string;
-  condition?: string;
-}
 
 export interface InteractionButton {
   id: string;
@@ -25,7 +19,6 @@ export interface InteractionButton {
 
 export interface BaseNodeData {
   label: string;
-  choices: Choice[];
 }
 
 export interface TextNodeData extends BaseNodeData {
@@ -35,10 +28,6 @@ export interface TextNodeData extends BaseNodeData {
 
 export interface VideoNodeData extends BaseNodeData {
   videoUrl: string;
-  customButtons: {
-    label: string;
-    timestamp: number;
-  }[];
   interactionButtons: InteractionButton[];
 }
 

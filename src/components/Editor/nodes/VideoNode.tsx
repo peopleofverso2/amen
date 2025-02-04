@@ -102,19 +102,6 @@ const VideoNode = ({ data, isConnectable }: VideoNodeProps) => {
               isEditing={true}
             />
           </Box>
-
-          <Stack spacing={1}>
-            {data.choices.map((choice, index) => (
-              <Button
-                key={index}
-                variant="outlined"
-                size="small"
-                sx={{ justifyContent: 'flex-start' }}
-              >
-                {choice.text}
-              </Button>
-            ))}
-          </Stack>
         </CardContent>
 
         <Handle
@@ -122,15 +109,6 @@ const VideoNode = ({ data, isConnectable }: VideoNodeProps) => {
           position={Position.Top}
           isConnectable={isConnectable}
         />
-        {[Position.Bottom, Position.Right, Position.Left].map((position, index) => (
-          <Handle
-            key={position}
-            type="source"
-            position={position}
-            id={`choice-${index}`}
-            isConnectable={isConnectable}
-          />
-        ))}
       </Card>
 
       <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
