@@ -18,9 +18,22 @@ import {
   MenuItem,
   Stack,
   Slider,
+  Switch,
+  FormControlLabel,
+  Divider,
+  Collapse,
+  Tooltip
 } from '@mui/material';
 import { ChromePicker } from 'react-color';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { 
+  Add as AddIcon, 
+  Edit as EditIcon, 
+  Delete as DeleteIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  Settings as SettingsIcon,
+  Preview as PreviewIcon
+} from '@mui/icons-material';
 import { InteractionNodeData, InteractionButton } from '../../../types/nodes';
 import Draggable from 'react-draggable';
 
@@ -191,6 +204,9 @@ const ButtonEditor = ({ button, onSave, onClose }: ButtonEditorProps) => {
 
 const InteractionNode = memo(({ data, isConnectable }: InteractionNodeProps) => {
   const [editingButton, setEditingButton] = useState<InteractionButton | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [showTimingSettings, setShowTimingSettings] = useState(false);
 
   const handleAddButton = () => {
     const newButton: InteractionButton = {
@@ -223,81 +239,167 @@ const InteractionNode = memo(({ data, isConnectable }: InteractionNodeProps) => 
     <>
       <Card sx={{ width: 350, backgroundColor: '#2a2a2a' }}>
         <CardContent>
-          <Typography variant="h6" gutterBottom color="white">
-            Interaction: {data.label}
-          </Typography>
+          <Stack spacing={2}>
+            {/* En-tête avec titre et contrôles */}
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Typography variant="h6" color="white">
+                {data.label}
+              </Typography>
+              <Stack direction="row" spacing={1}>
+                <Tooltip title="Paramètres de timing">
+                  <IconButton 
+                    size="small" 
+                    onClick={() => setShowTimingSettings(!showTimingSettings)}
+                    sx={{ color: 'white' }}
+                  >
+                    <SettingsIcon />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Prévisualisation">
+                  <IconButton 
+                    size="small" 
+                    onClick={() => setShowPreview(!showPreview)}
+                    sx={{ color: 'white' }}
+                  >
+                    <PreviewIcon />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+            </Stack>
 
-          <Box sx={{ 
-            position: 'relative', 
-            width: '100%', 
-            height: 200, 
-            border: '1px dashed #666',
-            borderRadius: 1,
-            overflow: 'hidden'
-          }}>
-            {data.buttons?.map((button) => (
-              <Box
-                key={button.id}
-                sx={{
-                  position: 'absolute',
-                  left: `${button.position?.x}%`,
-                  top: `${button.position?.y}%`,
-                  transform: 'translate(-50%, -50%)',
-                }}
-              >
-                <Button
-                  variant="contained"
-                  style={{
-                    backgroundColor: button.style?.backgroundColor,
-                    color: button.style?.textColor,
-                    borderRadius: button.style?.borderRadius,
-                    fontSize: button.style?.fontSize,
+            {/* Paramètres de timing */}
+            <Collapse in={showTimingSettings}>
+              <Card variant="outlined" sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.05)' }}>
+                <Stack spacing={2}>
+                  <Typography variant="subtitle2" color="white">
+                    Paramètres d'apparition
+                  </Typography>
+                  
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={data.timing.showAtEnd}
+                        onChange={(e) => {
+                          data.timing.showAtEnd = e.target.checked;
+                          if (e.target.checked) {
+                            data.timing.showAtTime = undefined;
+                          }
+                        }}
+                        color="primary"
+                      />
+                    }
+                    label="Afficher à la fin de la vidéo"
+                    sx={{ color: 'white' }}
+                  />
+
+                  {!data.timing.showAtEnd && (
+                    <TextField
+                      label="Afficher à (secondes)"
+                      type="number"
+                      value={data.timing.showAtTime || 0}
+                      onChange={(e) => {
+                        data.timing.showAtTime = Number(e.target.value);
+                      }}
+                      variant="outlined"
+                      size="small"
+                      sx={{ input: { color: 'white' }, label: { color: 'white' } }}
+                    />
+                  )}
+
+                  <TextField
+                    label="Durée d'affichage (secondes)"
+                    type="number"
+                    value={data.timing.duration || ''}
+                    onChange={(e) => {
+                      data.timing.duration = Number(e.target.value);
+                    }}
+                    variant="outlined"
+                    size="small"
+                    sx={{ input: { color: 'white' }, label: { color: 'white' } }}
+                  />
+                </Stack>
+              </Card>
+            </Collapse>
+
+            {/* Zone de prévisualisation */}
+            <Box 
+              sx={{ 
+                position: 'relative',
+                width: '100%',
+                height: 200,
+                border: '1px dashed #666',
+                borderRadius: 1,
+                overflow: 'hidden',
+                bgcolor: showPreview ? 'rgba(0,0,0,0.5)' : 'transparent'
+              }}
+            >
+              {data.buttons?.map((button) => (
+                <Box
+                  key={button.id}
+                  sx={{
+                    position: 'absolute',
+                    left: `${button.position?.x}%`,
+                    top: `${button.position?.y}%`,
+                    transform: 'translate(-50%, -50%)',
                   }}
                 >
-                  {button.label}
-                </Button>
-                <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                  <IconButton
-                    size="small"
-                    onClick={() => setEditingButton(button)}
-                    sx={{ color: 'white' }}
+                  <Button
+                    variant="contained"
+                    style={{
+                      backgroundColor: button.style?.backgroundColor,
+                      color: button.style?.textColor,
+                      borderRadius: button.style?.borderRadius,
+                      fontSize: button.style?.fontSize,
+                    }}
                   >
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
-                    size="small"
-                    onClick={() => handleDeleteButton(button.id)}
-                    sx={{ color: 'white' }}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </Stack>
-                <Handle
-                  type="source"
-                  position={Position.Bottom}
-                  id={`button-${button.id}`}
-                  style={{ bottom: -20 }}
-                  isConnectable={isConnectable}
-                />
-              </Box>
-            ))}
-          </Box>
+                    {button.label}
+                  </Button>
+                  {!showPreview && (
+                    <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                      <IconButton
+                        size="small"
+                        onClick={() => setEditingButton(button)}
+                        sx={{ color: 'white' }}
+                      >
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDeleteButton(button.id)}
+                        sx={{ color: 'white' }}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Stack>
+                  )}
+                  <Handle
+                    type="source"
+                    position={Position.Bottom}
+                    id={`button-${button.id}`}
+                    style={{ bottom: -20 }}
+                    isConnectable={isConnectable}
+                  />
+                </Box>
+              ))}
+            </Box>
 
-          <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
-            <IconButton onClick={handleAddButton} sx={{ color: 'white' }}>
-              <AddIcon />
-            </IconButton>
-          </Box>
+            {/* Bouton d'ajout */}
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+              <IconButton 
+                onClick={handleAddButton}
+                sx={{ color: 'white', bgcolor: 'rgba(255,255,255,0.1)' }}
+              >
+                <AddIcon />
+              </IconButton>
+            </Box>
 
-          <Stack spacing={2} sx={{ mt: 2 }}>
-            <Typography variant="body2" color="white">
-              Timing: {data.timing.showAtEnd ? "Fin de la vidéo" : `${data.timing.showAtTime}s`}
+            {/* Informations de timing */}
+            <Typography variant="body2" color="gray" align="center">
+              {data.timing.showAtEnd 
+                ? "Apparaît à la fin de la vidéo" 
+                : `Apparaît à ${data.timing.showAtTime}s`}
+              {data.timing.duration && ` pendant ${data.timing.duration}s`}
             </Typography>
-            {data.timing.duration && (
-              <Typography variant="body2" color="white">
-                Durée: {data.timing.duration}s
-              </Typography>
-            )}
           </Stack>
         </CardContent>
 
