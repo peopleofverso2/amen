@@ -3,20 +3,33 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Configuration de CORS
-app.use(cors());
+// Configuration détaillée de CORS
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
 app.use(express.json());
 
 // Configuration du stockage des fichiers
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = path.join(__dirname, '../uploads');
+    const thumbnailsDir = path.join(__dirname, '../uploads/thumbnails');
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    if (!fs.existsSync(thumbnailsDir)) {
+      fs.mkdirSync(thumbnailsDir, { recursive: true });
     }
     cb(null, uploadDir);
   },
@@ -41,6 +54,21 @@ const upload = multer({
   }
 });
 
+// Fonction pour générer une vignette
+const generateThumbnail = (videoPath, thumbnailPath) => {
+  return new Promise((resolve, reject) => {
+    ffmpeg(videoPath)
+      .screenshots({
+        timestamps: ['1'],
+        filename: path.basename(thumbnailPath),
+        folder: path.dirname(thumbnailPath),
+        size: '320x180'
+      })
+      .on('end', () => resolve(thumbnailPath))
+      .on('error', (err) => reject(err));
+  });
+};
+
 // Servir les fichiers statiques
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
@@ -48,7 +76,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 let mediaFiles = [];
 
 // Routes
-app.post('/api/media/upload', upload.single('file'), (req, res) => {
+app.post('/api/media/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       throw new Error('Aucun fichier uploadé');
@@ -57,7 +85,6 @@ app.post('/api/media/upload', upload.single('file'), (req, res) => {
     const file = req.file;
     let tags = [];
     
-    // Récupérer les tags s'ils sont présents
     if (req.body.tags) {
       try {
         tags = JSON.parse(req.body.tags);
@@ -66,20 +93,35 @@ app.post('/api/media/upload', upload.single('file'), (req, res) => {
       }
     }
 
+    // Générer la vignette
+    const thumbnailFilename = path.basename(file.filename, path.extname(file.filename)) + '.jpg';
+    const thumbnailPath = path.join(__dirname, '../uploads/thumbnails', thumbnailFilename);
+    await generateThumbnail(file.path, thumbnailPath);
+
     const metadata = {
       id: Date.now().toString(),
-      filename: file.filename,
-      originalName: file.originalname,
+      name: file.originalname,
+      type: file.mimetype.startsWith('video/') ? 'video' : 'image',
       mimeType: file.mimetype,
       size: file.size,
-      url: `/uploads/${file.filename}`,
-      tags: tags,
-      createdAt: new Date(),
-      updatedAt: new Date()
+      tags: tags || [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
 
-    mediaFiles.push(metadata);
-    res.json(metadata);
+    const mediaFile = {
+      metadata,
+      url: `http://localhost:${port}/uploads/${file.filename}`,
+      thumbnailUrl: `http://localhost:${port}/uploads/thumbnails/${thumbnailFilename}`
+    };
+
+    mediaFiles.push({
+      ...mediaFile,
+      filename: file.filename,
+      thumbnailFilename
+    });
+
+    res.json(mediaFile);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -92,35 +134,45 @@ app.get('/api/media', (req, res) => {
   if (search) {
     const searchLower = search.toLowerCase();
     filteredFiles = filteredFiles.filter(file => 
-      file.originalName.toLowerCase().includes(searchLower) ||
-      file.tags.some(tag => tag.toLowerCase().includes(searchLower))
+      file.metadata.name.toLowerCase().includes(searchLower) ||
+      file.metadata.tags.some(tag => tag.toLowerCase().includes(searchLower))
     );
   }
 
   if (tags) {
     const tagList = tags.split(',');
     filteredFiles = filteredFiles.filter(file =>
-      tagList.some(tag => file.tags.includes(tag))
+      tagList.some(tag => file.metadata.tags.includes(tag))
     );
   }
 
-  res.json(filteredFiles);
+  const filesWithUrls = filteredFiles.map(file => ({
+    metadata: file.metadata,
+    url: `http://localhost:${port}/uploads/${file.filename}`,
+    thumbnailUrl: `http://localhost:${port}/uploads/thumbnails/${file.thumbnailFilename}`
+  }));
+
+  res.json(filesWithUrls);
 });
 
 app.get('/api/media/:id', (req, res) => {
   const { id } = req.params;
-  const file = mediaFiles.find(f => f.id === id);
+  const file = mediaFiles.find(f => f.metadata.id === id);
   
   if (!file) {
     return res.status(404).json({ error: 'Fichier non trouvé' });
   }
 
-  res.json(file);
+  res.json({
+    metadata: file.metadata,
+    url: `http://localhost:${port}/uploads/${file.filename}`,
+    thumbnailUrl: `http://localhost:${port}/uploads/thumbnails/${file.thumbnailFilename}`
+  });
 });
 
 app.delete('/api/media/:id', (req, res) => {
   const { id } = req.params;
-  const fileIndex = mediaFiles.findIndex(f => f.id === id);
+  const fileIndex = mediaFiles.findIndex(f => f.metadata.id === id);
   
   if (fileIndex === -1) {
     return res.status(404).json({ error: 'Fichier non trouvé' });
@@ -128,10 +180,12 @@ app.delete('/api/media/:id', (req, res) => {
 
   const file = mediaFiles[fileIndex];
   const filePath = path.join(__dirname, '../uploads', file.filename);
+  const thumbnailPath = path.join(__dirname, '../uploads/thumbnails', file.thumbnailFilename);
 
   try {
     fs.unlinkSync(filePath);
-    mediaFiles = mediaFiles.filter(f => f.id !== id);
+    fs.unlinkSync(thumbnailPath);
+    mediaFiles = mediaFiles.filter(f => f.metadata.id !== id);
     res.json({ message: 'Fichier supprimé avec succès' });
   } catch (error) {
     res.status(500).json({ error: 'Erreur lors de la suppression du fichier' });
@@ -140,7 +194,7 @@ app.delete('/api/media/:id', (req, res) => {
 
 app.patch('/api/media/:id', (req, res) => {
   const { id } = req.params;
-  const fileIndex = mediaFiles.findIndex(f => f.id === id);
+  const fileIndex = mediaFiles.findIndex(f => f.metadata.id === id);
   
   if (fileIndex === -1) {
     return res.status(404).json({ error: 'Fichier non trouvé' });
@@ -149,24 +203,25 @@ app.patch('/api/media/:id', (req, res) => {
   const updates = req.body;
   const file = mediaFiles[fileIndex];
 
-  // Mise à jour des métadonnées autorisées
   if (updates.tags) {
-    file.tags = updates.tags;
+    file.metadata.tags = updates.tags;
   }
 
-  file.updatedAt = new Date();
+  file.metadata.updatedAt = new Date().toISOString();
   mediaFiles[fileIndex] = file;
 
-  res.json(file);
+  res.json({
+    metadata: file.metadata,
+    url: `http://localhost:${port}/uploads/${file.filename}`,
+    thumbnailUrl: `http://localhost:${port}/uploads/thumbnails/${file.thumbnailFilename}`
+  });
 });
 
 // Middleware de gestion d'erreurs
-const errorHandler = (err, req, res, next) => {
+app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: err.message });
-};
-
-app.use(errorHandler);
+});
 
 app.listen(port, () => {
   console.log(`Serveur démarré sur http://localhost:${port}`);
