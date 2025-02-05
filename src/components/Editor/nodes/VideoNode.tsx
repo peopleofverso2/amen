@@ -21,11 +21,27 @@ import ReactPlayer from 'react-player';
 import { VideoNodeData } from '../../../types/nodes';
 import MediaLibrary from '../../MediaLibrary/MediaLibrary';
 import InteractionButtons from './InteractionButtons';
+import { MediaFile } from '../../../types/media';
 
 interface VideoNodeProps {
   data: VideoNodeData;
   isConnectable: boolean;
   onCreateInteraction?: (nodeId: string) => void;
+}
+
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+  return (
+    <div hidden={value !== index} {...other}>
+      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+    </div>
+  );
 }
 
 const VideoNode = memo(({ data, isConnectable, onCreateInteraction }: VideoNodeProps) => {
@@ -62,8 +78,35 @@ const VideoNode = memo(({ data, isConnectable, onCreateInteraction }: VideoNodeP
     }
   };
 
+  const handleMediaSelect = (selectedMedia: MediaFile[]) => {
+    if (selectedMedia.length > 0) {
+      // Utiliser la première vidéo sélectionnée
+      const mediaFile = selectedMedia[0];
+      data.videoUrl = mediaFile.url;
+      data.label = mediaFile.metadata.name;
+      handleClose();
+    }
+  };
+
+  const handleSave = () => {
+    // Mettre à jour le nœud avec la nouvelle URL vidéo
+    data.videoUrl = videoUrl;
+    if (!data.label || data.label === 'Nœud Vidéo') {
+      // Si pas de label, utiliser la dernière partie de l'URL
+      const urlParts = videoUrl.split('/');
+      data.label = urlParts[urlParts.length - 1] || 'Vidéo YouTube';
+    }
+    handleClose();
+  };
+
   return (
     <>
+      <Handle
+        type="target"
+        position={Position.Top}
+        isConnectable={isConnectable}
+      />
+
       <Card sx={{ width: 350, backgroundColor: '#2a2a2a' }}>
         <CardContent>
           <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
@@ -80,10 +123,10 @@ const VideoNode = memo(({ data, isConnectable, onCreateInteraction }: VideoNodeP
           </Stack>
 
           <Box sx={{ height: 200, mb: 2 }}>
-            {videoUrl ? (
+            {data.videoUrl ? (
               <ReactPlayer
                 ref={playerRef}
-                url={videoUrl}
+                url={data.videoUrl}
                 width="100%"
                 height="100%"
                 controls
@@ -115,25 +158,21 @@ const VideoNode = memo(({ data, isConnectable, onCreateInteraction }: VideoNodeP
             )}
           </Box>
         </CardContent>
-
-        <Handle
-          type="target"
-          position={Position.Top}
-          isConnectable={isConnectable}
-          id="in"
-          style={{ top: 0 }}
-        />
-
-        <Handle
-          type="source"
-          position={Position.Bottom}
-          isConnectable={isConnectable}
-          id="out"
-          style={{ bottom: 0 }}
-        />
       </Card>
 
-      <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        isConnectable={isConnectable}
+      />
+
+      {/* Dialog de sélection de média */}
+      <Dialog
+        open={open}
+        onClose={handleClose}
+        maxWidth="lg"
+        fullWidth
+      >
         <DialogTitle>Sélectionner une vidéo</DialogTitle>
         <DialogContent>
           <Tabs value={tabValue} onChange={handleTabChange}>
@@ -153,44 +192,26 @@ const VideoNode = memo(({ data, isConnectable, onCreateInteraction }: VideoNodeP
               onChange={(e) => setVideoUrl(e.target.value)}
               helperText="Collez l'URL YouTube ou une autre URL vidéo valide"
             />
+            <DialogActions>
+              <Button onClick={handleClose}>Annuler</Button>
+              <Button onClick={handleSave} variant="contained">
+                Sélectionner
+              </Button>
+            </DialogActions>
           </TabPanel>
 
           <TabPanel value={tabValue} index={1}>
             <Box sx={{ height: '60vh' }}>
-              <MediaLibrary onSelect={(url) => {
-                setVideoUrl(url);
-                handleClose();
-              }} />
+              <MediaLibrary
+                onSelect={handleMediaSelect}
+                multiSelect={false}
+              />
             </Box>
           </TabPanel>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose}>Annuler</Button>
-          <Button onClick={() => {
-            data.videoUrl = videoUrl;
-            handleClose();
-          }} variant="contained">
-            Sélectionner
-          </Button>
-        </DialogActions>
       </Dialog>
     </>
   );
 });
-
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-    </div>
-  );
-}
 
 export default VideoNode;
