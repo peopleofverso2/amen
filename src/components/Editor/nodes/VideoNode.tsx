@@ -1,5 +1,5 @@
-import { memo, useState, useRef } from 'react';
-import { Handle, Position } from 'reactflow';
+import { memo, useState, useRef, useCallback } from 'react';
+import { Handle, Position, useReactFlow } from 'reactflow';
 import { 
   Card, 
   CardContent, 
@@ -16,12 +16,13 @@ import {
   Box,
   IconButton
 } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
+import { Add as AddIcon, Slideshow as SlideshowIcon, Fullscreen as FullscreenIcon } from '@mui/icons-material';
 import ReactPlayer from 'react-player';
 import { VideoNodeData } from '../../../types/nodes';
 import MediaLibrary from '../../MediaLibrary/MediaLibrary';
 import InteractionButtons from './InteractionButtons';
 import { MediaFile } from '../../../types/media';
+import FullscreenPlaylist from '../../FullscreenPlaylist/FullscreenPlaylist';
 
 interface VideoNodeProps {
   data: VideoNodeData;
@@ -49,7 +50,10 @@ const VideoNode = memo(({ data, isConnectable, onCreateInteraction }: VideoNodeP
   const [tabValue, setTabValue] = useState(0);
   const [videoUrl, setVideoUrl] = useState(data.videoUrl || '');
   const [showingInteractions, setShowingInteractions] = useState(false);
+  const [isPlaylistOpen, setIsPlaylistOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const playerRef = useRef<ReactPlayer>(null);
+  const { getNodes } = useReactFlow();
 
   const handleClickOpen = () => setOpen(true);
   const handleClose = () => setOpen(false);
@@ -99,6 +103,14 @@ const VideoNode = memo(({ data, isConnectable, onCreateInteraction }: VideoNodeP
     handleClose();
   };
 
+  const handleOpenPlaylist = useCallback(() => {
+    setIsPlaylistOpen(true);
+  }, []);
+
+  const handleFullscreen = () => {
+    setIsFullscreen(true);
+  };
+
   return (
     <>
       <Handle
@@ -113,13 +125,29 @@ const VideoNode = memo(({ data, isConnectable, onCreateInteraction }: VideoNodeP
             <Typography variant="h6" color="white">
               {data.label || 'Nœud Vidéo'}
             </Typography>
-            <IconButton 
-              onClick={handleCreateInteraction}
-              sx={{ color: 'white' }}
-              title="Ajouter des interactions"
-            >
-              <AddIcon />
-            </IconButton>
+            <Stack direction="row" spacing={1}>
+              <IconButton 
+                onClick={handleOpenPlaylist}
+                sx={{ color: 'white' }}
+                title="Voir la playlist"
+              >
+                <SlideshowIcon />
+              </IconButton>
+              <IconButton 
+                onClick={handleFullscreen}
+                sx={{ color: 'white' }}
+                title="Mode plein écran"
+              >
+                <FullscreenIcon />
+              </IconButton>
+              <IconButton 
+                onClick={handleCreateInteraction}
+                sx={{ color: 'white' }}
+                title="Ajouter des interactions"
+              >
+                <AddIcon />
+              </IconButton>
+            </Stack>
           </Stack>
 
           <Box sx={{ height: 200, mb: 2 }}>
@@ -210,6 +238,92 @@ const VideoNode = memo(({ data, isConnectable, onCreateInteraction }: VideoNodeP
           </TabPanel>
         </DialogContent>
       </Dialog>
+
+      {/* Mode plein écran */}
+      <Dialog
+        open={isFullscreen}
+        onClose={() => setIsFullscreen(false)}
+        maxWidth={false}
+        fullScreen
+      >
+        <Box
+          sx={{
+            width: '100%',
+            height: '100%',
+            bgcolor: 'black',
+            position: 'relative',
+          }}
+        >
+          <ReactPlayer
+            ref={playerRef}
+            url={data.videoUrl}
+            width="100%"
+            height="100%"
+            controls={false}
+            playing
+            onProgress={handleVideoProgress}
+            onEnded={handleVideoEnded}
+          />
+          
+          {/* Bouton Echap qui apparaît au mouvement de la souris */}
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 16,
+              right: 16,
+              opacity: 0,
+              transition: 'opacity 0.3s',
+              '&:hover': {
+                opacity: 1,
+              },
+            }}
+            onMouseMove={(e) => {
+              const target = e.currentTarget;
+              target.style.opacity = '1';
+              setTimeout(() => {
+                target.style.opacity = '0';
+              }, 2000);
+            }}
+          >
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => setIsFullscreen(false)}
+            >
+              Echap
+            </Button>
+          </Box>
+
+          {/* Zone des interactions */}
+          <Box 
+            sx={{ 
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 150,
+              display: showingInteractions ? 'block' : 'none'
+            }}
+          >
+            <InteractionButtons
+              buttons={data.interactionButtons || []}
+              onChange={(newButtons) => {
+                data.interactionButtons = newButtons;
+              }}
+              containerWidth={window.innerWidth}
+              containerHeight={150}
+              isEditing={false}
+            />
+          </Box>
+        </Box>
+      </Dialog>
+
+      {/* Playlist en plein écran */}
+      <FullscreenPlaylist
+        open={isPlaylistOpen}
+        onClose={() => setIsPlaylistOpen(false)}
+        nodes={getNodes()}
+      />
     </>
   );
 });
