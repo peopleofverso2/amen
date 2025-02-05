@@ -2,129 +2,155 @@ import { useState } from 'react';
 import {
   Card,
   CardMedia,
-  CardContent,
-  CardActions,
-  Typography,
-  IconButton,
-  Chip,
   Box,
   Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
+  DialogTitle,
+  Checkbox,
+  Typography,
+  IconButton,
   Button,
-  Autocomplete,
-  TextField,
 } from '@mui/material';
 import {
-  Edit as EditIcon,
   Delete as DeleteIcon,
-  PlayCircleOutline as PlayIcon,
 } from '@mui/icons-material';
 import { MediaFile } from '../../types/media';
 import ReactPlayer from 'react-player';
 
 interface MediaCardProps {
   mediaFile: MediaFile;
-  availableTags: string[];
-  onDelete: () => void;
-  onTagsUpdate: (newTags: string[]) => void;
+  onSelect?: (mediaFile: MediaFile) => void;
+  onDelete?: (mediaFile: MediaFile) => void;
+  selected?: boolean;
 }
 
 export default function MediaCard({
   mediaFile,
-  availableTags,
+  onSelect,
   onDelete,
-  onTagsUpdate,
+  selected = false,
 }: MediaCardProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [editTagsOpen, setEditTagsOpen] = useState(false);
-  const [editedTags, setEditedTags] = useState(mediaFile.metadata.tags);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const isVideo = mediaFile.metadata.type === 'video';
 
-  const handleTagsSave = () => {
-    onTagsUpdate(editedTags);
-    setEditTagsOpen(false);
+  const handlePreviewClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPreviewOpen(true);
   };
 
-  const isVideo = mediaFile.metadata.type === 'video';
+  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    if (onSelect) {
+      onSelect(mediaFile);
+    }
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (onDelete) {
+      onDelete(mediaFile);
+    }
+    setDeleteDialogOpen(false);
+  };
 
   return (
     <>
-      <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-        {/* Aperçu du média */}
+      <Card 
+        sx={{ 
+          position: 'relative',
+          width: '100%',
+          paddingTop: '56.25%', // 16:9 aspect ratio
+          bgcolor: 'background.paper',
+        }}
+      >
         <Box
           sx={{
-            position: 'relative',
-            paddingTop: '56.25%', // Ratio 16:9
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
             cursor: 'pointer',
           }}
-          onClick={() => setPreviewOpen(true)}
+          onClick={handlePreviewClick}
         >
-          {isVideo ? (
-            <>
-              <CardMedia
-                component="img"
-                image={mediaFile.url}
-                sx={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                }}
-              />
-              <PlayIcon
-                sx={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  fontSize: 48,
-                  color: 'white',
-                }}
-              />
-            </>
-          ) : (
-            <CardMedia
-              component="img"
-              image={mediaFile.url}
-              sx={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-              }}
-            />
-          )}
-        </Box>
-
-        <CardContent sx={{ flexGrow: 1 }}>
-          <Typography variant="subtitle1" gutterBottom>
+          <CardMedia
+            component="img"
+            image={mediaFile.thumbnailUrl || mediaFile.url}
+            alt={mediaFile.metadata.name}
+            sx={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+            }}
+          />
+          <Typography
+            variant="caption"
+            sx={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              bgcolor: 'rgba(0, 0, 0, 0.6)',
+              color: 'white',
+              p: 0.5,
+              textOverflow: 'ellipsis',
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+            }}
+          >
             {mediaFile.metadata.name}
           </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-            {mediaFile.metadata.tags.map((tag) => (
-              <Chip
-                key={tag}
-                label={tag}
-                size="small"
-                variant="outlined"
-              />
-            ))}
+        </Box>
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            display: 'flex',
+            gap: 1,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {onDelete && (
+            <IconButton
+              size="small"
+              onClick={handleDeleteClick}
+              sx={{
+                bgcolor: 'rgba(255, 255, 255, 0.8)',
+                '&:hover': {
+                  bgcolor: 'rgba(255, 255, 255, 0.9)',
+                },
+              }}
+            >
+              <DeleteIcon />
+            </IconButton>
+          )}
+        </Box>
+        {onSelect && (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 8,
+              left: 8,
+              bgcolor: 'rgba(255, 255, 255, 0.8)',
+              borderRadius: '4px',
+              zIndex: 1,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Checkbox
+              checked={selected}
+              onChange={handleCheckboxChange}
+            />
           </Box>
-        </CardContent>
-
-        <CardActions>
-          <IconButton size="small" onClick={() => setEditTagsOpen(true)}>
-            <EditIcon />
-          </IconButton>
-          <IconButton size="small" onClick={onDelete}>
-            <DeleteIcon />
-          </IconButton>
-        </CardActions>
+        )}
       </Card>
 
       {/* Dialog de prévisualisation */}
@@ -134,7 +160,7 @@ export default function MediaCard({
         maxWidth="md"
         fullWidth
       >
-        <DialogContent>
+        <DialogContent sx={{ p: 0, bgcolor: 'black' }}>
           {isVideo ? (
             <ReactPlayer
               url={mediaFile.url}
@@ -153,34 +179,20 @@ export default function MediaCard({
         </DialogContent>
       </Dialog>
 
-      {/* Dialog d'édition des tags */}
+      {/* Dialog de confirmation de suppression */}
       <Dialog
-        open={editTagsOpen}
-        onClose={() => setEditTagsOpen(false)}
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
       >
-        <DialogTitle>Modifier les tags</DialogTitle>
+        <DialogTitle>Confirmer la suppression</DialogTitle>
         <DialogContent>
-          <Autocomplete
-            multiple
-            freeSolo
-            options={availableTags}
-            value={editedTags}
-            onChange={(_, newValue) => setEditedTags(newValue)}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                variant="outlined"
-                placeholder="Ajouter des tags"
-                fullWidth
-                sx={{ mt: 2 }}
-              />
-            )}
-          />
+          Êtes-vous sûr de vouloir supprimer "{mediaFile.metadata.name}" ?
+          Cette action est irréversible.
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditTagsOpen(false)}>Annuler</Button>
-          <Button onClick={handleTagsSave} variant="contained">
-            Sauvegarder
+          <Button onClick={() => setDeleteDialogOpen(false)}>Annuler</Button>
+          <Button onClick={handleConfirmDelete} color="error">
+            Supprimer
           </Button>
         </DialogActions>
       </Dialog>

@@ -10,13 +10,14 @@ export interface MediaMetadata {
     height: number;
   };
   tags: string[];
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface MediaFile {
   metadata: MediaMetadata;
   url: string; // URL locale ou distante
+  thumbnailUrl?: string; // URL de la vignette pour les vidéos
 }
 
 // Interface abstraite pour le stockage

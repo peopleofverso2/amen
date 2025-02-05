@@ -3,23 +3,16 @@ import {
   Box,
   Grid,
   Paper,
-  Typography,
-  Chip,
   TextField,
-  IconButton,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Autocomplete,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import {
   Search as SearchIcon,
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
   CloudUpload as CloudUploadIcon,
+  Check as CheckIcon,
 } from '@mui/icons-material';
 import { MediaFile, MediaFilter } from '../../types/media';
 import { MediaLibraryService } from '../../services/MediaLibraryService';
@@ -28,15 +21,32 @@ import UploadDialog from './UploadDialog';
 
 const mediaLibrary = new MediaLibraryService();
 
-export default function MediaLibrary() {
+interface MediaLibraryProps {
+  onSelect?: (mediaFiles: MediaFile[]) => void;
+  multiSelect?: boolean;
+}
+
+export default function MediaLibrary({ 
+  onSelect,
+  multiSelect = true 
+}: MediaLibraryProps) {
   const [media, setMedia] = useState<MediaFile[]>([]);
   const [filter, setFilter] = useState<MediaFilter>({});
   const [search, setSearch] = useState('');
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [selectedMedia, setSelectedMedia] = useState<Set<string>>(new Set());
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
 
-  // Charger les médias et les tags disponibles
   useEffect(() => {
     loadMedia();
     loadTags();
@@ -52,6 +62,7 @@ export default function MediaLibrary() {
       setMedia(mediaFiles);
     } catch (error) {
       console.error('Erreur lors du chargement des médias:', error);
+      showError('Erreur lors du chargement des médias');
     }
   };
 
@@ -63,6 +74,7 @@ export default function MediaLibrary() {
       setAvailableTags(Array.from(tags));
     } catch (error) {
       console.error('Erreur lors du chargement des tags:', error);
+      showError('Erreur lors du chargement des tags');
     }
   };
 
@@ -72,39 +84,72 @@ export default function MediaLibrary() {
       loadMedia();
       loadTags();
       setUploadOpen(false);
+      showSuccess('Média uploadé avec succès');
     } catch (error) {
       console.error('Erreur lors de l\'upload:', error);
+      showError('Erreur lors de l\'upload du média');
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce média ?')) {
-      try {
-        await mediaLibrary.deleteMedia(id);
-        loadMedia();
-        loadTags();
-      } catch (error) {
-        console.error('Erreur lors de la suppression:', error);
-      }
-    }
-  };
-
-  const handleTagUpdate = async (mediaFile: MediaFile, newTags: string[]) => {
+  const handleDelete = async (mediaFile: MediaFile) => {
     try {
-      await mediaLibrary.updateMetadata(mediaFile.metadata.id, {
-        tags: newTags,
+      await mediaLibrary.deleteMedia(mediaFile.metadata.id);
+      setSelectedMedia(prev => {
+        const next = new Set(prev);
+        next.delete(mediaFile.metadata.id);
+        return next;
       });
       loadMedia();
       loadTags();
+      showSuccess('Média supprimé avec succès');
     } catch (error) {
-      console.error('Erreur lors de la mise à jour des tags:', error);
+      console.error('Erreur lors de la suppression:', error);
+      showError('Erreur lors de la suppression du média');
     }
+  };
+
+  const handleSelect = (mediaFile: MediaFile) => {
+    setSelectedMedia(prev => {
+      const next = new Set(prev);
+      if (next.has(mediaFile.metadata.id)) {
+        next.delete(mediaFile.metadata.id);
+      } else {
+        if (!multiSelect) {
+          next.clear();
+        }
+        next.add(mediaFile.metadata.id);
+      }
+      return next;
+    });
+  };
+
+  const handleConfirmSelection = () => {
+    if (onSelect) {
+      const selectedFiles = media.filter(m => selectedMedia.has(m.metadata.id));
+      onSelect(selectedFiles);
+    }
+  };
+
+  const showSuccess = (message: string) => {
+    setSnackbar({
+      open: true,
+      message,
+      severity: 'success'
+    });
+  };
+
+  const showError = (message: string) => {
+    setSnackbar({
+      open: true,
+      message,
+      severity: 'error'
+    });
   };
 
   return (
     <Box sx={{ p: 3 }}>
       {/* Barre d'outils */}
-      <Paper sx={{ p: 2, mb: 2 }}>
+      <Paper sx={{ p: 2, mb: 2, bgcolor: 'background.paper' }}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} md={4}>
             <TextField
@@ -126,16 +171,6 @@ export default function MediaLibrary() {
               renderInput={(params) => (
                 <TextField {...params} placeholder="Filtrer par tags" />
               )}
-              renderTags={(value, getTagProps) =>
-                value.map((option, index) => (
-                  <Chip
-                    label={option}
-                    {...getTagProps({ index })}
-                    color="primary"
-                    variant="outlined"
-                  />
-                ))
-              }
             />
           </Grid>
           <Grid item xs={12} md={2}>
@@ -157,13 +192,35 @@ export default function MediaLibrary() {
           <Grid item xs={12} sm={6} md={4} lg={3} key={mediaFile.metadata.id}>
             <MediaCard
               mediaFile={mediaFile}
-              availableTags={availableTags}
-              onDelete={() => handleDelete(mediaFile.metadata.id)}
-              onTagsUpdate={(newTags) => handleTagUpdate(mediaFile, newTags)}
+              onSelect={handleSelect}
+              onDelete={handleDelete}
+              selected={selectedMedia.has(mediaFile.metadata.id)}
             />
           </Grid>
         ))}
       </Grid>
+
+      {/* Bouton de validation de la sélection */}
+      {onSelect && selectedMedia.size > 0 && (
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: 20,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1000,
+          }}
+        >
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<CheckIcon />}
+            onClick={handleConfirmSelection}
+          >
+            Valider la sélection ({selectedMedia.size})
+          </Button>
+        </Box>
+      )}
 
       {/* Dialog d'upload */}
       <UploadDialog
@@ -172,6 +229,21 @@ export default function MediaLibrary() {
         onUpload={handleUpload}
         availableTags={availableTags}
       />
+
+      {/* Snackbar pour les notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+      >
+        <Alert 
+          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))} 
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
