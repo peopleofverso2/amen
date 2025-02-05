@@ -23,6 +23,7 @@ export interface InteractionButton {
 
 export interface BaseNodeData {
   label: string;
+  onDataChange?: (data: any) => void;
 }
 
 export interface TextNodeData extends BaseNodeData {
@@ -31,8 +32,15 @@ export interface TextNodeData extends BaseNodeData {
 }
 
 export interface VideoNodeData extends BaseNodeData {
-  videoUrl?: string;
-  interactionButtons: InteractionButton[];
+  id: string;
+  videoUrl: string;
+  buttons?: Array<{
+    id: string;
+    label: string;
+    buttonText: string;
+    targetNodeId?: string;
+  }>;
+  isPlaybackMode?: boolean;
 }
 
 export interface InteractionNodeData extends BaseNodeData {
@@ -55,8 +63,38 @@ export interface RewardNodeData extends BaseNodeData {
   value: number;
 }
 
+export interface ButtonNodeData extends BaseNodeData {
+  text?: string;
+  style?: {
+    backgroundColor?: string;
+    textColor?: string;
+    borderRadius?: string;
+    fontSize?: string;
+    borderStyle?: 'none' | 'solid' | 'dashed' | 'dotted';
+    borderColor?: string;
+    borderWidth?: string;
+    boxShadow?: string;
+    padding?: string;
+    textAlign?: 'left' | 'center' | 'right';
+    transition?: string;
+    hoverBackgroundColor?: string;
+    hoverTextColor?: string;
+    hoverScale?: string;
+  };
+  variant?: 'contained' | 'outlined' | 'text';
+  size?: 'small' | 'medium' | 'large';
+  icon?: {
+    name: string;
+    position: 'start' | 'end';
+  };
+  targetNodeId?: string;
+  onDataChange?: (data: Partial<ButtonNodeData>) => void;
+  onNavigate?: (targetNodeId: string) => void;
+  isPlaybackMode?: boolean;
+}
+
 export type CustomNode = Node<
-  TextNodeData | VideoNodeData | InteractionNodeData | VoucherNodeData | RewardNodeData
+  TextNodeData | VideoNodeData | InteractionNodeData | VoucherNodeData | RewardNodeData | ButtonNodeData
 >;
 
 export type CustomEdge = Edge;
