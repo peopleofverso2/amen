@@ -41,6 +41,7 @@ export interface VideoNodeData extends BaseNodeData {
     targetNodeId?: string;
   }>;
   isPlaybackMode?: boolean;
+  onDataChange?: (data: Partial<VideoNodeData>) => void;
 }
 
 export interface InteractionNodeData extends BaseNodeData {
@@ -64,7 +65,13 @@ export interface RewardNodeData extends BaseNodeData {
 }
 
 export interface ButtonNodeData extends BaseNodeData {
-  text?: string;
+  id: string;
+  label: string;
+  text: string;
+  targetNodeId?: string;
+  isPlaybackMode?: boolean;
+  onDataChange?: (data: Partial<ButtonNodeData>) => void;
+  onButtonClick?: () => void;
   style?: {
     backgroundColor?: string;
     textColor?: string;
@@ -87,10 +94,7 @@ export interface ButtonNodeData extends BaseNodeData {
     name: string;
     position: 'start' | 'end';
   };
-  targetNodeId?: string;
-  onDataChange?: (data: Partial<ButtonNodeData>) => void;
   onNavigate?: (targetNodeId: string) => void;
-  isPlaybackMode?: boolean;
 }
 
 export type CustomNode = Node<

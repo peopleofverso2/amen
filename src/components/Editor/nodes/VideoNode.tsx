@@ -1,87 +1,112 @@
-import React, { useCallback } from 'react';
-import { Handle, Position } from 'reactflow';
-import { Box, Typography, Stack, IconButton } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
+import React from 'react';
+import { NodeProps } from 'reactflow';
+import { Box, IconButton, Typography, Stack } from '@mui/material';
+import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
+import { VideoNodeData } from '../../../types/nodes';
+import BaseNode from './BaseNode';
+import AddIcon from '@mui/icons-material/Add';
 
-import VideoPlayer from './video/VideoPlayer';
-import VideoImportDialog from './video/VideoImportDialog';
-import EmptyVideoState from './video/EmptyVideoState';
-import useVideoNode from './video/useVideoNode';
-
-interface VideoNodeData {
-  id: string;
-  videoUrl: string;
-  label: string;
+interface VideoPlayerProps {
+  url: string;
+  isPlaybackMode?: boolean;
   buttons?: Array<{
     id: string;
     label: string;
     buttonText: string;
     targetNodeId?: string;
   }>;
-  onDataChange?: (data: any) => void;
-  onNavigate?: (targetNodeId: string) => void;
-  isPlaybackMode?: boolean;
+  showButtons?: boolean;
+  onVideoClick?: () => void;
+  onButtonClick?: (targetNodeId: string) => void;
 }
 
-interface VideoNodeProps {
-  id: string;
-  data: VideoNodeData;
-  isConnectable: boolean;
-  onCreateInteraction?: (sourceNodeId: string) => void;
-}
+const VideoPlayer: React.FC<VideoPlayerProps> = ({
+  url,
+  isPlaybackMode,
+  buttons,
+  showButtons,
+  onVideoClick,
+  onButtonClick,
+}) => (
+  <Box sx={{ position: 'relative', width: '100%', minHeight: '200px' }}>
+    <video
+      src={url}
+      controls={isPlaybackMode}
+      style={{
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        borderRadius: '4px',
+      }}
+      onClick={onVideoClick}
+    />
+    {showButtons && buttons && (
+      <Stack direction="row" spacing={1} sx={{ position: 'absolute', bottom: 0, left: 0 }}>
+        {buttons.map(button => (
+          <IconButton key={button.id} onClick={() => onButtonClick?.(button.targetNodeId || '')}>
+            {button.buttonText}
+          </IconButton>
+        ))}
+      </Stack>
+    )}
+  </Box>
+);
 
-const VideoNode: React.FC<VideoNodeProps> = React.memo(({ id, data, isConnectable, onCreateInteraction }) => {
-  const handleDataChange = useCallback((updates: any) => {
-    if (data.onDataChange) {
-      data.onDataChange({ ...updates, id });
+const EmptyVideoState: React.FC<{ onImportClick?: () => void }> = ({ onImportClick }) => (
+  <Box
+    sx={{
+      width: '100%',
+      height: '200px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      bgcolor: 'rgba(0, 0, 0, 0.05)',
+      borderRadius: '4px',
+      cursor: 'pointer',
+    }}
+    onClick={onImportClick}
+  >
+    <IconButton>
+      <PlayCircleOutlineIcon />
+    </IconButton>
+  </Box>
+);
+
+const VideoNode: React.FC<NodeProps<VideoNodeData>> = ({ data, id, isConnectable, onCreateInteraction }) => {
+  const { videoUrl, label, isPlaybackMode, buttons, onDataChange, onNavigate } = data;
+
+  const handleDataChange = (updates: any) => {
+    if (onDataChange) {
+      onDataChange({ ...updates, id });
     }
-  }, [data.onDataChange, id]);
+  };
 
-  const {
-    isOpen,
-    isPlaying,
-    showButtons,
-    handleOpen,
-    handleClose,
-    handleSave,
-    handleVideoEnd,
-    handleError,
-    handleButtonClick,
-  } = useVideoNode({
-    id,
-    initialUrl: data.videoUrl,
-    isPlaybackMode: data.isPlaybackMode,
-    onDataChange: handleDataChange,
-    onNavigate: data.onNavigate,
-  });
-
-  const handleCreateInteraction = useCallback(() => {
+  const handleCreateInteraction = () => {
     if (onCreateInteraction) {
       onCreateInteraction(id);
     }
-  }, [onCreateInteraction, id]);
+  };
 
   return (
-    <Box sx={{ width: 350 }}>
-      <Handle type="target" position={Position.Top} isConnectable={isConnectable} />
-      
-      <Box
-        sx={{
-          bgcolor: '#2a2a2a',
-          borderRadius: 1,
-          p: 2,
-          '&:hover': {
-            '& .add-interaction': {
-              opacity: 1,
-            },
-          },
-        }}
-      >
+    <BaseNode
+      label={label}
+      isPlaybackMode={isPlaybackMode}
+      onLabelChange={isPlaybackMode ? undefined : (newLabel) => handleDataChange({ label: newLabel })}
+    >
+      <Box sx={{ 
+        width: '100%',
+        minWidth: 320,
+        position: 'relative',
+        '& .MuiIconButton-root': {
+          opacity: isPlaybackMode ? 0 : 1,
+          pointerEvents: isPlaybackMode ? 'none' : 'auto'
+        }
+      }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6" sx={{ color: 'white' }}>
-            {data.label || 'Nœud Vidéo'}
+            {label}
           </Typography>
-          {!data.isPlaybackMode && (
+          {!isPlaybackMode && (
             <Stack direction="row" spacing={1}>
               <IconButton 
                 className="add-interaction"
@@ -90,6 +115,7 @@ const VideoNode: React.FC<VideoNodeProps> = React.memo(({ id, data, isConnectabl
                   color: 'white',
                   opacity: 0,
                   transition: 'opacity 0.2s',
+                  pointerEvents: isPlaybackMode ? 'none' : 'auto'
                 }}
                 title="Ajouter des interactions"
               >
@@ -98,42 +124,30 @@ const VideoNode: React.FC<VideoNodeProps> = React.memo(({ id, data, isConnectabl
             </Stack>
           )}
         </Box>
-
-        <Box
-          onClick={!data.isPlaybackMode ? handleOpen : undefined}
-          sx={{
-            cursor: data.isPlaybackMode ? 'default' : 'pointer',
-            position: 'relative',
-          }}
-        >
-          {data.videoUrl ? (
-            <VideoPlayer
-              url={data.videoUrl}
-              isPlaybackMode={data.isPlaybackMode}
-              playing={isPlaying}
-              onEnded={handleVideoEnd}
-              onError={handleError}
-              buttons={data.buttons?.map(button => ({
-                ...button,
-                onClick: () => handleButtonClick(button.targetNodeId || ''),
-              })) || []}
-              showButtons={showButtons}
+        {videoUrl ? (
+          <VideoPlayer
+            url={videoUrl}
+            isPlaybackMode={isPlaybackMode}
+            buttons={buttons}
+            showButtons={true}
+            onVideoClick={!isPlaybackMode ? () => {
+              // Ouvrir la boîte de dialogue d'édition
+            } : undefined}
+            onButtonClick={onNavigate}
+          />
+        ) : (
+          !isPlaybackMode && (
+            <EmptyVideoState
+              onImportClick={() => {
+                // TODO: Implémenter l'import de vidéo
+                console.log('Import video clicked');
+              }}
             />
-          ) : (
-            <EmptyVideoState />
-          )}
-        </Box>
+          )
+        )}
       </Box>
-
-      <Handle type="source" position={Position.Bottom} isConnectable={isConnectable} />
-
-      <VideoImportDialog
-        open={isOpen}
-        onClose={handleClose}
-        onSave={handleSave}
-      />
-    </Box>
+    </BaseNode>
   );
-});
+};
 
 export default VideoNode;

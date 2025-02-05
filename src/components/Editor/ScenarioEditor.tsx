@@ -1,41 +1,39 @@
-import { useState, useCallback, DragEvent, useEffect, useRef } from 'react';
-import ReactFlow, {
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import {
+  ReactFlow,
+  ReactFlowProvider,
+  Node,
+  Edge,
+  Connection,
+  useNodesState,
+  useEdgesState,
+  addEdge,
   Background,
   Controls,
   MiniMap,
-  addEdge,
-  useNodesState,
-  useEdgesState,
-  Connection,
-  Edge,
-  Node,
-  NodeProps,
-  ReactFlowProvider,
-  useReactFlow,
 } from 'reactflow';
 import { Box, AppBar, Toolbar, IconButton, Typography } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import 'reactflow/dist/style.css';
 
 import { CustomNode, CustomEdge } from '../../types/nodes';
-import { Project } from '../../types/project';
 import { ProjectService } from '../../services/projectService';
 import Sidebar from './controls/Sidebar';
-import BaseNode from './nodes/BaseNode';
 import VideoNode from './nodes/VideoNode';
-import ButtonNode from './nodes/button/ButtonNode';
+import ButtonNode from './nodes/ButtonNode';
+import ScenarioPreview from '../Preview/ScenarioPreview';
 
 const nodeTypes = {
-  base: BaseNode,
-  video: VideoNode,
-  button: ButtonNode,
+  videoNode: VideoNode,
+  buttonNode: ButtonNode,
 };
 
 let id = 0;
 const getId = () => `node_${id++}`;
 
 interface ScenarioEditorProps {
-  projectId?: string;
+  projectId: string;
   onBackToLibrary: () => void;
 }
 
@@ -43,6 +41,7 @@ const Flow: React.FC<ScenarioEditorProps> = ({ projectId, onBackToLibrary }) => 
   const [nodes, setNodes, onNodesChange] = useNodesState<CustomNode[]>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<CustomEdge[]>([]);
   const [isPlaybackMode, setIsPlaybackMode] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const projectService = ProjectService.getInstance();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -52,138 +51,194 @@ const Flow: React.FC<ScenarioEditorProps> = ({ projectId, onBackToLibrary }) => 
     setReactFlowInstance(instance);
   }, []);
 
-  // Charger le projet au démarrage
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+
+      if (!reactFlowWrapper.current || !reactFlowInstance) return;
+
+      const type = event.dataTransfer.getData('application/reactflow');
+      if (!type) return;
+
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      const newNodeId = getId();
+
+      let newNode;
+      if (type === 'videoNode') {
+        newNode = {
+          id: newNodeId,
+          type,
+          position,
+          data: {
+            id: newNodeId,
+            label: 'Nouvelle vidéo',
+            videoUrl: '',
+            buttons: [],
+            isPlaybackMode,
+            onDataChange: (data: any) => handleNodeDataChange(newNodeId, data),
+          }
+        };
+      } else if (type === 'buttonNode') {
+        newNode = {
+          id: newNodeId,
+          type,
+          position,
+          data: {
+            id: newNodeId,
+            label: 'Nouveau bouton',
+            text: 'Cliquez ici',
+            isPlaybackMode,
+            onDataChange: (data: any) => handleNodeDataChange(newNodeId, data),
+            onButtonClick: () => {
+              if (newNode.data.targetNodeId) {
+                const targetNode = nodes.find(n => n.id === newNode.data.targetNodeId);
+                if (targetNode) {
+                  reactFlowInstance.setCenter(
+                    targetNode.position.x,
+                    targetNode.position.y,
+                    { duration: 800 }
+                  );
+                }
+              }
+            }
+          }
+        };
+      }
+
+      if (newNode) {
+        setNodes((nds) => nds.concat(newNode));
+      }
+    },
+    [reactFlowInstance, isPlaybackMode, nodes]
+  );
+
+  const handleNodeDataChange = useCallback(
+    (nodeId: string, newData: any) => {
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (node.id === nodeId) {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                ...newData,
+                isPlaybackMode,
+                onDataChange: (data: any) => handleNodeDataChange(nodeId, data),
+                onButtonClick: node.data.onButtonClick
+              },
+            };
+          }
+          return node;
+        })
+      );
+    },
+    [isPlaybackMode]
+  );
+
   useEffect(() => {
-    const loadProject = async () => {
+    const loadProjectData = async () => {
       if (projectId) {
         try {
           const project = await projectService.loadProject(projectId);
-          setNodes(project.nodes);
-          setEdges(project.edges);
+          if (project.nodes) {
+            const nodesWithCallbacks = project.nodes.map((node: Node) => ({
+              ...node,
+              data: {
+                ...node.data,
+                isPlaybackMode,
+                onDataChange: (data: any) => handleNodeDataChange(node.id, data),
+                onButtonClick: node.type === 'buttonNode' ? () => {
+                  if (node.data.targetNodeId) {
+                    const targetNode = project.nodes.find((n: Node) => n.id === node.data.targetNodeId);
+                    if (targetNode) {
+                      reactFlowInstance?.setCenter(
+                        targetNode.position.x,
+                        targetNode.position.y,
+                        { duration: 800 }
+                      );
+                    }
+                  }
+                } : undefined
+              }
+            }));
+            setNodes(nodesWithCallbacks);
+          }
+          if (project.edges) {
+            setEdges(project.edges);
+          }
         } catch (error) {
           console.error('Error loading project:', error);
         }
       }
     };
-    loadProject();
-  }, [projectId]);
 
-  const handleNodeDataChange = useCallback((nodeId: string, newData: any) => {
-    setNodes((nds) =>
-      nds.map((node) => {
-        if (node.id === nodeId) {
-          return { ...node, data: { ...node.data, ...newData } };
-        }
-        return node;
-      })
-    );
-  }, []);
+    loadProjectData();
+  }, [projectId, isPlaybackMode, reactFlowInstance]);
 
   const onConnect = useCallback(
     (params: Connection | Edge) => setEdges((eds) => addEdge(params, eds)),
     []
   );
 
-  const onDragOver = useCallback((event: DragEvent) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-  }, []);
-
-  const onDrop = useCallback(
-    (event: DragEvent) => {
-      event.preventDefault();
-
-      const type = event.dataTransfer.getData('application/reactflow');
-      if (!type || !reactFlowInstance || !reactFlowWrapper.current) return;
-
-      const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
-      const position = reactFlowInstance.project({
-        x: event.clientX - reactFlowBounds.left,
-        y: event.clientY - reactFlowBounds.top,
-      });
-
-      const newNodeId = getId();
-      const newNode: Node = {
-        id: newNodeId,
-        type,
-        position,
-        data: type === 'video' 
-          ? { 
-              id: newNodeId,
-              label: 'Nouvelle vidéo',
-              videoUrl: '',
-              buttons: [],
-              isPlaybackMode: isPlaybackMode,
-              onDataChange: (data: any) => handleNodeDataChange(newNodeId, data),
-            }
-          : type === 'button'
-            ? {
-                id: newNodeId,
-                label: 'Nouveau bouton',
-                text: 'Cliquez-moi',
-                style: {
-                  backgroundColor: '#2196f3',
-                  textColor: '#ffffff',
-                  borderRadius: '4px',
-                  fontSize: '14px',
-                  borderStyle: 'none',
-                  borderColor: '#000000',
-                  borderWidth: '1px',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                  padding: '8px 16px',
-                  textAlign: 'center',
-                  transition: 'all 0.3s ease',
-                  hoverBackgroundColor: '#1976d2',
-                  hoverTextColor: '#ffffff',
-                  hoverScale: '1.05'
-                },
-                variant: 'contained',
-                size: 'medium',
-                isPlaybackMode: isPlaybackMode,
-                onDataChange: (data: any) => handleNodeDataChange(newNodeId, data),
-              }
-            : {
-                label: `Nouveau ${type}`,
-              },
-      };
-
-      setNodes((nds) => nds.concat(newNode));
-    },
-    [isPlaybackMode, reactFlowInstance]
-  );
-
   const handleSave = async () => {
-    if (!projectId) return;
-    
     setIsSaving(true);
     try {
-      const project = await projectService.loadProject(projectId);
-      const updatedProject: Project = {
-        ...project,
+      await projectService.saveProject(projectId, {
         nodes,
         edges,
-        updatedAt: new Date().toISOString()
-      };
-      await projectService.saveProject(updatedProject);
+      });
     } catch (error) {
       console.error('Error saving project:', error);
-    } finally {
-      setIsSaving(false);
     }
+    setIsSaving(false);
   };
 
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <AppBar position="static" color="default" elevation={1}>
+      <AppBar 
+        position="static" 
+        color="default" 
+        elevation={1}
+        sx={{
+          bgcolor: isPlaybackMode ? 'success.main' : 'default',
+          color: isPlaybackMode ? 'white' : 'inherit'
+        }}
+      >
         <Toolbar>
           <IconButton edge="start" color="inherit" onClick={onBackToLibrary}>
             <ArrowBackIcon />
           </IconButton>
           <Typography variant="h6" sx={{ flexGrow: 1, ml: 2 }}>
-            Éditeur de scénario
+            {isPlaybackMode ? 'Mode Lecture' : 'Éditeur de scénario'}
           </Typography>
+          {isPlaybackMode && (
+            <IconButton 
+              color="inherit" 
+              onClick={() => setIsPreviewMode(true)}
+              sx={{ ml: 1 }}
+            >
+              <FullscreenIcon />
+            </IconButton>
+          )}
         </Toolbar>
       </AppBar>
+
+      {isPreviewMode && (
+        <ScenarioPreview
+          nodes={nodes}
+          edges={edges}
+          onClose={() => setIsPreviewMode(false)}
+        />
+      )}
 
       <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <Sidebar 
@@ -195,8 +250,7 @@ const Flow: React.FC<ScenarioEditorProps> = ({ projectId, onBackToLibrary }) => 
         <Box 
           ref={reactFlowWrapper}
           sx={{ 
-            flex: 1, 
-            position: 'relative',
+            flex: 1,
             height: 'calc(100vh - 64px)',
             '& .react-flow__panel': {
               zIndex: 5
@@ -208,7 +262,8 @@ const Flow: React.FC<ScenarioEditorProps> = ({ projectId, onBackToLibrary }) => 
               zIndex: 5
             },
             '& .react-flow__handle': {
-              zIndex: 3
+              zIndex: 3,
+              opacity: isPlaybackMode ? 0 : 1
             },
             '& .react-flow__node': {
               zIndex: 2
@@ -224,27 +279,34 @@ const Flow: React.FC<ScenarioEditorProps> = ({ projectId, onBackToLibrary }) => 
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onDragOver={onDragOver}
-            onDrop={onDrop}
+            onNodesChange={isPlaybackMode ? undefined : onNodesChange}
+            onEdgesChange={isPlaybackMode ? undefined : onEdgesChange}
+            onConnect={isPlaybackMode ? undefined : onConnect}
+            onDragOver={isPlaybackMode ? undefined : onDragOver}
+            onDrop={isPlaybackMode ? undefined : onDrop}
             onInit={onInit}
             nodeTypes={nodeTypes}
             fitView
-            deleteKeyCode="Delete"
-            selectionKeyCode="Shift"
-            multiSelectionKeyCode="Control"
-            snapToGrid={true}
+            deleteKeyCode={isPlaybackMode ? null : "Delete"}
+            selectionKeyCode={isPlaybackMode ? null : "Shift"}
+            multiSelectionKeyCode={isPlaybackMode ? null : "Control"}
+            snapToGrid={!isPlaybackMode}
             snapGrid={[15, 15]}
             defaultEdgeOptions={{
               type: 'smoothstep',
               animated: true
             }}
             proOptions={{ hideAttribution: true }}
+            nodesDraggable={!isPlaybackMode}
+            nodesConnectable={!isPlaybackMode}
+            elementsSelectable={!isPlaybackMode}
           >
             <Background />
-            <Controls />
+            <Controls 
+              showInteractive={!isPlaybackMode}
+              showZoom={true}
+              showFitView={true}
+            />
             <MiniMap />
           </ReactFlow>
         </Box>
@@ -253,10 +315,4 @@ const Flow: React.FC<ScenarioEditorProps> = ({ projectId, onBackToLibrary }) => 
   );
 };
 
-const ScenarioEditor: React.FC<ScenarioEditorProps> = (props) => (
-  <ReactFlowProvider>
-    <Flow {...props} />
-  </ReactFlowProvider>
-);
-
-export default ScenarioEditor;
+export default Flow;
